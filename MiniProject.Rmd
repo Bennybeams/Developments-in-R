@@ -1,0 +1,331 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Importation des données :
+```{r}
+library(readr)
+library(dplyr)
+Data=read_csv("Notes.csv") #On récupère le csv dans la variable Data qui contiendra TOUTES les données
+typeof(Data$Math)
+NoteGenre=Data[2:7] #On retire seulement le nom des élèves
+Notes=Data[2:6] #On retire la première colonne avec le nom des élèves pour ne se focaliser que sur les notes
+Data
+```
+Separation de chaque matière en vecteurs :
+```{r}
+NotesMath=as.numeric(unlist(Notes["Math"]))
+NotesPhysique=as.numeric(unlist(Notes["Physique"]))
+NotesHistGeo=as.numeric(unlist(Notes["HistGeo"]))
+NotesLitterature=as.numeric(unlist(Notes["Litterature"]))
+NotesEPS=as.numeric(unlist(Notes["EPS"]))
+```
+
+1. Matrices de Covariance/Correlation et regression linéaire
+
+Le but est de trouver une correlation entre les notes des differentes matières
+Affichage du dataset puis de la matrice de covariance
+```{r}
+cov(Notes)
+```
+On préfèrera la matrice de correlation : proche de -1 = variables opposées, proche de 0 = variables non corrélées, proches de 1 = variables identiques
+```{r}
+cor(Notes)
+```
+On remarque qu'il y a une forte correlation entre les maths et la physique, ainsi qu'entre l'histoire/geo et le français d'une moindre manière. Il n'y a par contre une correlation d'aucune matière avec l'EPS.
+
+Grace à la régression linéaire, on peut tenter d'estimer la note d'EPS par exemple en fonction des autres notes.
+```{r}
+NotesregEPS=lm(EPS~Math+Physique+HistGeo+Litterature, data=Data)
+summary(NotesregEPS)
+```
+On peut établir une fonction de regression linéaire qui est NoteEPS = 13,0743 - 0,4 x NoteMath+0,4 x NotePhysique - 0,3 x NoteHistGeo + 0,15 x NoteLitterature. Ce résultat montre qu'en fait la note d'EPS est relativement peu dépendante des autres notes. Il est donc difficile de prédire une note d'EPS.
+Par contre si nous refaisons une regression linéaire pour les maths par exemple :
+
+```{r}
+NotesregMath=lm(Math~EPS+Math+Physique+HistGeo+Litterature, data=Data)
+summary(NotesregMath)
+```
+Nous remarquons que la correlation est bien là entre les Maths et la Physique, mais aussi dans une moindre mesure avec les autres matières. Est ce que cette regression linéaire nous permet de prédire la note en Maths ?
+```{r}
+fitted(NotesregMath) #Nous montre la prédiction pour chaque élève
+resid(NotesregMath) #Nous montre l'erreur pour chaque élève (Note réelle - Note estimée)? On nomme ces valeurs Résidus
+```
+On obtiens une estimation plutot correcte, à 2 points près.
+Afin de valider notre estimation, on peut vérifier que les résidus sont répartis de manière homogène autours de 0 :
+```{r}
+res<-resid(NotesregMath)
+plot(res,main="Résidus")
+abline(h=0,col="red")
+```
+On peut aussi calculer la moyenne des résidus :
+```{r}
+mean(res)
+```
+On voit qu'elle est très proche de 0 et donc que les résidus sont répartis de manière homogène.
+D'autre part, summary(NotesregMath) nous montre une p-value très petite, ce qui indique que au test de significativité globale on peut rejeter l'hypothèse H0 et dire que le modèle est globalement significatif. On remarque que c'est moins le cas pour le modèle concernant l'EPS.
+
+
+2. Visualisations
+2.a Histogramme
+```{r}
+NotesEPS
+hist(NotesEPS, breaks=20)
+```
+On peut afficher la PDF (fonction de densité) :
+```{r}
+library(ggplot2)
+library(reshape2)
+Notes.plot = melt(Notes)
+p <- ggplot(aes(x=value, colour=variable), data=Notes.plot)
+p + geom_density()
+```
+
+Pour afficher un ensemble d'histogrammes pour chaque dimension on utilisera le code :
+```{r}
+par(mfrow=c(1,5))
+for (j in 1:5) hist(as.numeric(unlist(Notes[,j])),breaks=20,main = paste("Var",j))
+```
+2.b Box Plot
+Sur une seule dimension (une seule variable aléatoire)
+```{r}
+boxplot(NotesMath)
+```
+Sur plusieur dimension, il est possible d'afficher un boxplot par dimension :
+```{r}
+par(mfrow=c(1,5))
+for (j in 1:5) boxplot(as.numeric(unlist(Notes[,j])), main = paste("Var",j))
+```
+2. ScatterPlot
+Permet d'afficher une valeur de colonne en fonction d'une autre. Sur les données sur plusieur dimensions on peut les afficher sous forme matricielle :
+```{r}
+zfac <- factor(Data$Genre)
+mescouleurs <- rainbow(length(levels(zfac)))
+plot(Notes,pch = 19,col=mescouleurs[zfac])
+```
+On peut retrouver la correlation ici entre les maths et la physique, ainsi qu'entre l'histoire geographie et la litterature
+
+Note : Au cas où nous aurions besoin d'étudier la moyenne en fonction du genre :
+```{r}
+moyenne=c()
+
+for (i in 1:length(row.names(Notes))){
+moyenne<-c(moyenne,sum(Notes[i,])/length(Notes[i,]))
+}
+
+eleves = c(Data["Eleve"])
+genre = c(Data["Genre"])
+MoyenneNotes = data.frame(eleves,moyenne,genre)
+MoyenneNotes
+```
+
+3. Machine Learning
+
+3.1. Procédures de ML supervisé (X et Y sont connus)
+
+3.1.a KNN
+```{r}
+library(class)
+X = Data[,2:6]
+Y = as.data.frame(Data[,7])
+learn = sample(1:60,50) # sample 60 indexes of individuals that will be used in the learning set
+train = X[learn,] # 50 obs for learning
+cl = Y[learn,]
+test = X[-learn,] # The remaining 10 obs for validation
+Yreel = Y[-learn,]
+?knn
+Prediction = knn(train,test,cl,k = 4)
+Resultat=data.frame(Data[-learn,],Prediction)
+Resultat
+
+```
+On remarquera que les erreurs sont dues à un contre exemple. En effet les garçons sont sensés être meilleurs en math et physique et les filles meilleures en histoire et français. Un garçon mauvais en maths/physique et bon en histoire/litterature sera prédit comme fille.
+
+On peut calculer la marge d'erreur :
+```{r}
+err = sum(Prediction != Yreel) / length(Yreel)
+err
+```
+Tentons d'améliorer ce résultat en utilisant la méthode V-fold cross validation (Plusieurs periodes d'apprentissage/test avec des échantillons différents)
+```{r}
+V = 20
+fold = rep(1:V,nrow(X)/V)
+for (v in 1:V){
+  learn = which(fold != v)
+  Xl = X[learn,] # 100 obs for learning
+  Yl = Y[learn,]
+  Xv = X[-learn,] # The remaining 50 obs for validation
+  Yv = Y[-learn,]
+  f = knn(Xl,Xv,Yl,k = 5)
+  err[v] = sum(f != Yv) / length(Yv)
+}
+#err
+mean(err)
+```
+Nous calculons ici l'erreur moyenne sur 20 tests differents à K=3. Est ce 3 est le bon paramètre ? Utilisons la validation croisée avec un K de 2 à 10 pour le vérifier.
+```{r}
+Kmax = 10
+V = 20
+err = matrix(NA,Kmax,20)
+fold = rep(1:V,nrow(X)/V)
+for (v in 1:V){
+  learn = which(fold != v)
+  Xl = X[learn,] 
+  Yl = Y[learn,]
+  Xv = X[-learn,]
+  Yv = Y[-learn,]
+  for (k in 1:Kmax){
+    f = knn(Xl,Xv,Yl,k)
+    err[k,v] = sum(f != Yv) / length(Yv)
+  }
+}
+plot(1:Kmax,rowMeans(err),type='b')
+```
+Il semble que le K ayant le taux d'erreur le plus bas est de 5. Nous noterons ce parametre K* (ou Kstar), que nous pourrons utiliser pour prédire le genre d'un élève en fonction de ses notes.
+
+Enfin, pour calculer l'estimation statistique de l'erreur globale, on applique la formule erreur moyenne +/- écart type :
+```{r}
+V = 20
+fold = rep(1:V,nrow(X)/V)
+for (v in 1:V){
+  learn = which(fold != v)
+  Xl = X[learn,] # 100 obs for learning
+  Yl = Y[learn,]
+  Xv = X[-learn,] # The remaining 50 obs for validation
+  Yv = Y[-learn,]
+  f = knn(Xl,Xv,Yl,k = 5)
+  err[v] = sum(f != Yv) / length(Yv)
+}
+StatGlobErr=c((mean(err)-sd(err)),(mean(err)),(mean(err)+sd(err)))
+StatGlobErr
+```
+
+
+3.1.b SVM
+Tout d'abord on reformatte le data frame Data pour ne garder que 4 dimensions :
+- La note en Math
+- La note en Français
+- Son genre
+Nous allons étudier le genre en fonction de la note en Math et Français.
+```{r}
+library(e1071)
+DF = data.frame(Data$Math, Data$Litterature, as.factor(Data$Genre))
+DF
+summary(DF)
+plot(DF$Data.Math,DF$Data.Litterature, col=DF$as.factor.Data.Genre, pch=16)
+legend(2,17.9,legend=c("Garçon","Fille"),col=1:length(DF$as.factor.Data.Genre),lty=1:2)
+```
+Construction du classificateur SVM mlin :
+```{r}
+mlin <- svm(DF$as.factor.Data.Genre ~ DF$Data.Math+DF$Data.Litterature, data=DF, kernel="linear",scale=F)
+print(mlin)
+```
+Mettons en évidence les "points supports" qui détermineront notre hyperplan SVM
+```{r}
+print((rownames(df))[mlin$index]) 
+plot(DF$Data.Math,DF$Data.Litterature, col=DF$as.factor.Data.Genre, pch=16)
+legend(2,17.9,legend=c("Garçon","Fille"),col=1:length(DF$as.factor.Data.Genre),lty=1:2)
+points(DF$Data.Math[mlin$index],DF$Data.Litterature[mlin$index],cex=3,col=rgb(0,0,0))
+```
+Nous pouvons maintenant représenter les frontières :
+```{r}
+beta.0 <- -mlin$rho
+beta.1 <- sum(mlin$coefs*DF$Data.Math[mlin$index])
+beta.2 <- sum(mlin$coefs*DF$Data.Litterature[mlin$index])
+plot(DF$Data.Math,DF$Data.Litterature, col=DF$as.factor.Data.Genre, pch=16)
+legend(2,17.9,legend=c("Garçon","Fille"),col=1:length(DF$as.factor.Data.Genre),lty=1:2)
+points(DF$Data.Math[mlin$index],DF$Data.Litterature[mlin$index],cex=3,col=rgb(0,0,0))
+abline(-beta.0/beta.2,-beta.1/beta.2,col="green")
+```
+
+3.1.c LDA
+```{r}
+library(MASS)
+X = Data[,2:6]
+Y = as.data.frame(Data[,7])
+learn = sample(1:60,50) # sample 60 indexes of individuals that will be used in the learning set
+learn = sample(1:60,50) # sample 60 indexes of individuals that will be used in the learning set
+train = X[learn,] # 50 obs for learning
+cl = Y[learn,]
+test = X[-learn,] # The remaining 10 obs for validation
+Yreel = Y[-learn,]
+f=lda(train,cl)
+f
+pred=predict(f,test)
+sum(pred$class != Yreel) / length(Yreel)
+```
+
+3.2 Unsupervised learning
+
+Le but de l'apprentissage non supervisé est de classifier une variable aléatoire sans avoir la correspondance pour apprentissage. En d'autre termes, on a X mais pas Y.
+
+3.2.a PCA
+Le but ici est de réduire les dimensions d'une variable aléatoire.
+Cette méthode utilise la combinaison linéaire (operations matricielles, calculs de eigen values).
+Tout d'abord il faut "centraliser" les données, c'est à dire déplacer les axes d'origine pour qu'ils se croisent au "centre" des valeurs.
+Ensuite calculer une matice Sigma en fonction de la variable aléatoire "centralisée" et d'en extraire les premiers eigenvectors. On retiendra les d premiers eigenvectors comme réduction des dimensions de notre data frame.
+
+Appliquons la pas à pas :
+```{r}
+Data=read_csv("Notes.csv")
+X=Data[,2:5]
+X 
+```
+X contiens seulement les notes mais pas l'indication de groupe 'Garçon' ou 'Fille'
+La procédure manuelle est la suivante :
+- Calcul de Xbar grace à la fonction scale(). Xbar contiens la valeur de X-µX. Elle permet de "centrer" les axes
+- Calcul de Sigma = XbarT*Xbar
+- Calcul des eigenvalues et eigenvectors de Sigma (choix de la valeur d, le nombre de eigenvector à retenir)
+- Affichage de Yhat, l'estimateur de classification
+```{r}
+# Première étape : calcul de Xbar
+Xbar = scale(X,center = TRUE, scale = FALSE)
+Xbar
+# Deuxième étape : calcul de Sigma
+Sigma = t(Xbar) %*% Xbar
+Sigma
+# Troisieme étape : Décomposition de Sigma
+out = eigen(Sigma)
+out
+d = 3 #on choisi arbitrairement de garder les deux premiers eigenvector. On étudiera plus tard comment choisir le meilleur d
+Ustar = out$vect[,1:d]
+Ustar
+# Dernière étape : Calcul de la matrice Yhat
+Yhat = as.matrix(X) %*% Ustar
+plot(Yhat)
+```
+
+En R, la fonction princomp permet de calculer le PCA automatiquement :
+```{r}
+Data=read_csv("Notes.csv")
+X=Data[,2:5]
+
+# Compute PCA
+pc = prcomp(X)
+# Project the data
+Yhat = predict(pc)
+Yhat
+# Select d
+screeplot(pc)
+100 * pc$sdev^2 / sum(pc$sdev^2)
+```
+Ainsi on a 4 composants. Pour réduire les dimensions on ne gardera que les composants les plus pertinants, c'est à dire ayant les variances les plus élevées. En calculant la proportion de variance de chaque composant, on a donc 79% pour le 1, 15% pour le 2, 3% pour le 3 et 1% pour le 4. Il semble donc évident que le 1 et le 2 sont les composant principaux car ils contiennent plus de 95% de l'information, et que 3 et 4 peuvent donc être ignorés. On retiendra donc d=2.
+```{r}
+d = 1
+
+# Plot
+plot(pc$x[,1:2], col=c('blue','red'))
+biplot(pc)
+par(mfrow = c(1,2))
+biplot(pc,col = c("black",0))
+biplot(pc,col = c(0,"purple")); box()
+```
+
+
+
+
+
+
+
+
+
