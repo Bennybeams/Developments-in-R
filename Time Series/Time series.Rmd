@@ -1,0 +1,54 @@
+---
+title: "Time Series Analysis - Day 1"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+### Packages and libraries installation.
+
+```{r}
+#install.packages('forecast', dependencies = TRUE)
+library(forecast)
+library(ggplot2)
+```
+
+Forecast gives usefull tools for time series analysis.
+
+### Time series "Varicelle" analysis.
+
+```{r}
+data=read.csv(file="http://eric.univ-lyon2.fr/~jjacques/Download/DataSet/varicelle.csv")
+plot(data$x)
+varicelle<-ts(data$x,start=c(1931,1),end=c(1972,6),freq=12)
+plot(varicelle)
+```
+
+We observe a cyclic pattern.
+
+```{r}
+mean(varicelle)
+```
+
+```{r}
+tmp=acf(varicelle, type="cor", plot=TRUE)
+ptmp=pacf(varicelle, type="cor", plot=FALSE)
+plot (ptmp)
+```
+
+The correlogram shows that the data are cyclic. We can see a correlation close to 1 every lag=1 so data looks correlated from one year to the next one.
+
+```{r}
+ggseasonplot(varicelle,year.labels= TRUE,year.labels.left=TRUE)
+```
+
+The seasonal plot confirm this trend, we can see that every year we have an increase on spring and a decrease on summer.
+
+Let's print the graph year by year instead of month by month.
+
+```{r}
+plot(aggregate(varicelle,nfrequency=1))
+```
+
+We dont see now a cyclic pattern. However we can see trends corresponding to historical events, like the dramatic decrease during the 2nd world war (due to the decrease of the natality).
