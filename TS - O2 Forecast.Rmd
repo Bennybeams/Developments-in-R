@@ -2,7 +2,7 @@
 title: "TS - O2 Forecast"
 author: "Benjamin BERNARD"
 date: "28/10/2021"
-output: html_document
+output: rmarkdown::github_document
 editor_options: 
   markdown: 
     wrap: sentence
